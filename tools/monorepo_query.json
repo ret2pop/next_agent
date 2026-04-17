@@ -1,0 +1,20 @@
+{
+  "type": "function",
+  "agent_instruction": "Use this to search the user's local codebase for internal files and logic.",
+  "function": {
+    "name": "monorepo_query",
+    "description": "Search the monorepo codebase for specific functions, classes, or context.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The exact search query to look up in the vector database."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "type": "function",
+  "agent_instruction": "Use this tool to schedule a task or add a to-do item to the user's agenda.",
+  "function": {
+    "name": "append_agenda",
+    "description": "Append a new task to the user's Org mode agenda file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "task_name": {
+          "type": "string",
+          "description": "The name or title of the task."
+        },
+        "scheduled_date": {
+          "type": "string",
+          "description": "The date to schedule the task, formatted EXACTLY as YYYY-MM-DD Day (e.g., 2026-04-17 Fri)."
+        },
+        "description": {
+          "type": "string",
+          "description": "A short, one-sentence description of the task."
+        }
+      },
+      "required": [
+        "task_name",
+        "scheduled_date",
+        "description"
+      ]
+    }
+  }
+}

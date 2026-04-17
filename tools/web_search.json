@@ -1,0 +1,20 @@
+{
+  "type": "function",
+  "agent_instruction": "Use this to search the public internet for general knowledge, up-to-date documentation, or external libraries.",
+  "function": {
+    "name": "web_search",
+    "description": "Search the public internet for up-to-date information, news, or external documentation.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query to look up on the web."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+}
