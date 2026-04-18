@@ -40,6 +40,7 @@ def cmd_help(agent, args):
 def cmd_rebuild(agent, args):
     agent.monorepo_rag.rebuild_index()
     agent.agent_rag.rebuild_index()
+    agent.email_rag.rebuild_index()
 
 @command_registry.register("/memory", "Show the current conversation history")
 def cmd_memory(agent, args):

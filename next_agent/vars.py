@@ -10,6 +10,7 @@ DB_PATH = os.path.expanduser(os.getenv("DB_PATH", "~/.cache/next_agent"))
 REPO_PATH = os.path.expanduser(os.getenv("REPO_PATH", "~/monorepo"))
 AGENT_ROOT = os.path.expanduser(os.getenv("AGENT_ROOT", "."))
 SRC_ROOT = os.path.expanduser(os.getenv("SRC_ROOT", "~/src"))
+EMAIL_ROOT = os.path.expanduser(os.getenv("EMAIL_ROOT", "~/email/ret2pop"))
 
 TOOLS_DIR = os.path.join(AGENT_ROOT, "tools")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")

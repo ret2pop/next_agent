@@ -1,0 +1,20 @@
+{
+  "type": "function",
+  "agent_instruction": "Use this to search the user's email RAG database, allowing for a deep search of their emails and specific content rather than just titles.",
+  "function": {
+    "name": "email_query",
+    "description": "Search the email RAG database for content INSIDE of emails, not just titles.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The exact search query to look up in the vector database."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+}

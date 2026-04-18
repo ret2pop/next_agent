@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_switch_branch",
+    "description": "Switch to a specific branch in a repository directory",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "description": "The name of the branch to switch to",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository directory to cd into",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch",
+        "path"
+      ]
+    }
+  },
+  "bash_template": "cd {{{path}}} && git checkout {{{branch}}}"
+}

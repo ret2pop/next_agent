@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_read_patch",
+    "description": "Read and display the patch for a specific commit in a repository",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "commit_hash": {
+          "description": "The commit hash to format as a patch",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository directory to cd into",
+          "type": "string"
+        }
+      },
+      "required": [
+        "commit_hash",
+        "path"
+      ]
+    }
+  },
+  "bash_template": "cd {{{path}}} && cat $(git format-patch -1 {{{commit_hash}}})"
+}

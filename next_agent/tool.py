@@ -3,11 +3,12 @@ import json
 from .vars import TOOLS_DIR, AGENDA_FILE
 from .search import TavilyProvider
 import subprocess
+import shlex
 
 class ToolRegistry:
     def __init__(self):
-        self.explicit_functions = {}  # Functions decorated with @register
-        self.schemas = []             # The JSON schemas for the LLM
+        self.explicit_functions = {}
+        self.schemas = []
         self.load_tools()
 
     def register(self, name):
@@ -49,16 +50,16 @@ class ToolRegistry:
         return f"Error: No implementation found for tool '{name}'."
 
     def _run_bash_template(self, template, args):
-        """Executes a declarative bash command using custom {{{key}}} delimiters."""
+        """Executes a declarative bash command with strict shell escaping."""
         try:
             cmd = template
-            
-            # Safely inject the arguments by replacing the custom delimiters
             for key, value in args.items():
                 target = "{{{" + key + "}}}"
-                cmd = cmd.replace(target, str(value))
+                
+                safe_value = shlex.quote(str(value)) 
+                
+                cmd = cmd.replace(target, safe_value)
             
-            # Quick safety check: Did the LLM leave unpopulated variables?
             if "{{{" in cmd and "}}}" in cmd:
                 print(f"⚠️ Warning: Unreplaced variables detected in bash command:\n{cmd}", flush=True)
 
@@ -106,8 +107,12 @@ def execute_monorepo_query(agent, query: str) -> str:
 @tool_registry.register("agent_code_query")
 def execute_agent_code_query(agent, query: str):
     """Search the agent's own source code to understand its architecture."""
-    # Point this to the new agent_rag
     return agent.agent_rag.search(query)
+
+@tool_registry.register("email_query")
+def execute_email_query(agent, query: str):
+    """Search the agent's own source code to understand its architecture."""
+    return agent.email_rag.search(query)
 
 @tool_registry.register("web_search")
 def execute_web_search(agent, query: str) -> str:

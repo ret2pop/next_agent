@@ -11,7 +11,7 @@ from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings # NEW IMPORT
 
-from .vars import DEFAULT_MODEL, REPO_PATH, DB_PATH, MAX_TOOL_CALLS, MEMORY_FILE, MD_DIR, SRC_ROOT, AGENT_ROOT
+from .vars import DEFAULT_MODEL, REPO_PATH, DB_PATH, MAX_TOOL_CALLS, MEMORY_FILE, MD_DIR, SRC_ROOT, AGENT_ROOT, EMAIL_ROOT
 from .memory import CodebaseRAG
 from .tool import tool_registry
 from .command import command_registry
@@ -20,6 +20,7 @@ class LocalAgent:
     def __init__(self):
         self.monorepo_rag = CodebaseRAG(repo_path=REPO_PATH, db_path=DB_PATH, index_name="monorepo_index")
         self.agent_rag = CodebaseRAG(repo_path=AGENT_ROOT, db_path=DB_PATH, index_name="agent_index")
+        self.email_rag = CodebaseRAG(repo_path=EMAIL_ROOT, db_path=DB_PATH, index_name="email_index", valid_exts=None)
         self.tools = tool_registry
         self.commands = command_registry
         
@@ -202,7 +203,13 @@ class LocalAgent:
 
                 # 2. Standard reasoning turn
                 print(f"🤔 Thinking (Step {iteration + 1})...", end="\r", flush=True)
-                response_msg = self.llm.invoke(self.history.messages)
+                calls_left = MAX_TOOL_CALLS - iteration
+                reminder_msg = SystemMessage(
+                    content=f"SYSTEM REMINDER: You have {calls_left} tool call(s) remaining for this request. "
+                            f"If you have enough information, respond with your final answer to the user."
+                )
+                messages_to_send = self.history.messages + [reminder_msg]
+                response_msg = self.llm.invoke(messages_to_send)
                 
                 # CASE: The model gives a final text answer
                 if not response_msg.tool_calls:

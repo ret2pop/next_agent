@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_checkout_branch",
+    "description": "Create and checkout a new branch in a specific repository directory",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "branch": {
+          "description": "The name of the new branch to create and checkout",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository directory to cd into",
+          "type": "string"
+        }
+      },
+      "required": [
+        "branch",
+        "path"
+      ]
+    }
+  },
+  "bash_template": "cd {{{path}}} && git checkout -b {{{branch}}}"
+}

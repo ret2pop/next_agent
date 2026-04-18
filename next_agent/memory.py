@@ -4,16 +4,29 @@ from langchain_ollama import OllamaEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-
+import email
+from email import policy
 from .vars import EMBEDDING_MODEL
 
 class CodebaseRAG:
-    def __init__(self, repo_path: str, db_path: str, index_name: str = "monorepo_index"):
+    def __init__(self, repo_path: str, db_path: str, index_name: str = "monorepo_index", valid_exts = (
+            ".py",
+            ".js",
+            ".ts",
+            ".jsx",
+            ".tsx",
+            ".md",
+            ".txt",
+            ".json",
+            ".org",
+            ".nix",
+        )):
         self.repo_path = repo_path
         self.db_path = db_path
-        self.index_name = index_name # <-- Make this configurable
+        self.index_name = index_name
         self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
         self.vector_store = None
+        self.valid_exts = valid_exts
         
         os.makedirs(self.db_path, exist_ok=True)
         self.load_existing_db()
@@ -50,23 +63,10 @@ class CodebaseRAG:
         start_time = time.time()
         print(f"\n🔍 [1/3] Scanning directory: {self.repo_path}...")
 
-        valid_exts = {
-            ".py",
-            ".js",
-            ".ts",
-            ".jsx",
-            ".tsx",
-            ".md",
-            ".txt",
-            ".json",
-            ".org",
-            ".nix",
-        }
         documents = []
         file_count = 0
 
         for root, dirs, files in os.walk(self.repo_path):
-            # Prune directories to speed up scan
             dirs[:] = [
                 d
                 for d in dirs
@@ -75,25 +75,52 @@ class CodebaseRAG:
             ]
 
             for file in files:
-                if os.path.splitext(file)[1].lower() in valid_exts:
+                if (self.valid_exts is None) or (os.path.splitext(file)[1].lower() in self.valid_exts):
                     file_path = os.path.join(root, file)
                     try:
-                        with open(
-                            file_path, "r", encoding="utf-8", errors="ignore"
-                        ) as f:
-                            documents.append(
-                                Document(
-                                    page_content=f.read(),
-                                    metadata={"source": file_path},
-                                )
-                            )
+                        if self.valid_exts is None:
+                            with open(file_path, "rb") as f:
+                                msg = email.message_from_binary_file(f, policy=policy.default)
+                                body = ""
+                                
+                                for part in msg.walk():
+                                    if part.get_content_type() == "text/plain":
+                                        body += part.get_content()
+                                
+                                if not body.strip():
+                                    body = msg.get("Subject", "No body text.")
+
+                                if body.strip():
+                                    documents.append(
+                                        Document(
+                                            page_content=body,
+                                            metadata={
+                                                "source": file_path,
+                                                "from": msg.get("From", "Unknown"),
+                                                "subject": msg.get("Subject", "No Subject")
+                                            },
+                                        )
+                                    )
+                                    
+                        else:
+                            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                content = f.read()
+                                if content.strip():
+                                    documents.append(
+                                        Document(
+                                            page_content=content,
+                                            metadata={"source": file_path},
+                                        )
+                                    )
+                                    
                         file_count += 1
                         if file_count % 20 == 0:
                             print(f"  • Processed {file_count} files...", end="\r")
+                            
                     except Exception:
                         continue
 
-        print(f"\n✅ Found {len(documents)} files.")
+        print(f"\n✅ Found {len(documents)} valid files.")
 
         print("✂️ [2/3] Chunking text into smaller pieces...")
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
@@ -104,7 +131,6 @@ class CodebaseRAG:
         print("⚠️  This is the slow part. Please wait, do not exit.")
 
         try:
-            # This is the line that usually 'hangs'
             self.vector_store = FAISS.from_documents(chunks, self.embeddings)
             self.vector_store.save_local(self.db_path, self.index_name)
 
@@ -112,4 +138,4 @@ class CodebaseRAG:
             print(f"🏁 Finished! Database built in {duration:.1f} seconds.")
         except Exception as e:
             print(f"\n❌ Embedding Error: {e}")
-            print("Check if Ollama is running and you have 'nomic-embed-text' pulled.")
+            print("Check if Ollama is running and you have your embedding model pulled.")

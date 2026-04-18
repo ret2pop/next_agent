@@ -1,0 +1,20 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mu_find",
+    "description": "Search for email headings using the mu email client's find command. Finds headings only. Use instead of email RAG when dealing with headings only.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "description": "The search query to pass to mu find",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "bash_template": "mu find {{{query}}}"
+}
