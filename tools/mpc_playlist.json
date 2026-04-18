@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mpc_playlist",
+    "description": "Retrieves the current MPD playlist using `mpc` with customizable formatting options.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [
+      ]
+    }
+  },
+  "bash_template": "mpc playlist"
+}

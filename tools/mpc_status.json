@@ -1,0 +1,14 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mpc_status",
+    "description": "Retrieves the current MPD playback status using `mpc` with customizable formatting options.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [
+      ]
+    }
+  },
+  "bash_template": "mpc status"
+}

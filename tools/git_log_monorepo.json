@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_log_monorepo",
+    "description": "Runs git log on the monorepo at /home/preston/monorepo with customizable options for lines, format, and graph visualization.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "Git log format string (default: empty for --oneline)",
+          "type": "string"
+        },
+        "lines": {
+          "description": "Number of commits to show (default: 50)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "format",
+        "lines"
+      ]
+    }
+  },
+  "bash_template": "git -C /home/preston/monorepo log -n {{{lines}}} --oneline --graph --decorate --all {{{format}}}"
+}
