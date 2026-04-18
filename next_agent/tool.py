@@ -89,3 +89,26 @@ def execute_append_agenda(agent, task_name: str, scheduled_date: str, descriptio
         return f"Success: Task '{task_name}' added to agenda for {scheduled_date}."
     except Exception as e:
         return f"Error: Failed to write to agenda. Details: {str(e)}"
+
+@tool_registry.register("create_bash_tool")
+def execute_create_bash_tool(agent, tool_name, description, bash_template, properties):
+    """Preston's tool-creation tool: Just writes a JSON manifest."""
+    manifest = {
+        "type": "function",
+        "function": {
+            "name": tool_name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys())
+            }
+        },
+        "bash_template": bash_template
+    }
+    
+    path = os.path.join(TOOLS_DIR, f"{tool_name}.json")
+    with open(path, "w") as f:
+        json.dump(manifest, f, indent=2)
+        
+    return f"Success: Manifest created for {tool_name}. Run /reload to initialize."

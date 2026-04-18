@@ -1,6 +1,7 @@
 import re
 import os
 import hashlib
+import subprocess
 from datetime import datetime
 from langchain_ollama import ChatOllama
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
@@ -10,7 +11,7 @@ from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings # NEW IMPORT
 
-from .vars import DEFAULT_MODEL, REPO_PATH, DB_PATH, MAX_TOOL_CALLS, MEMORY_FILE, ORG_DIR
+from .vars import DEFAULT_MODEL, REPO_PATH, DB_PATH, MAX_TOOL_CALLS, MEMORY_FILE, MD_DIR
 from .memory import CodebaseRAG
 from .tool import tool_registry
 from .command import command_registry
@@ -43,7 +44,7 @@ class LocalAgent:
             event.current_buffer.insert_text("\n")
         # -------------------------------
 
-        os.makedirs(ORG_DIR, exist_ok=True)
+        os.makedirs(MD_DIR, exist_ok=True)
         self._inject_system_prompt()
         self.cli_history = InMemoryHistory()
 
@@ -55,41 +56,85 @@ class LocalAgent:
         if os.path.exists(MEMORY_FILE):
             with open(MEMORY_FILE, "r") as f:
                 ltm_content = f.read().strip()
-        
-        memory_context = f"\nLONG-TERM USER CONTEXT:\n{ltm_content}" if ltm_content else ""
 
         prompt_content = (
-            "You are a versatile coding assistant. You have access to the following tools:\n"
+            "You are the personal Digital Famulus to Preston Pan. You are a warm, supportive, "
+            "and highly capable collaborator.\n\n"
+            
+            f"=== TEMPORAL ANCHORING ===\nCurrent Time: {current_time}.\n\n"
+            f"=== USER CONTEXT ===\n{ltm_content}\n\n"
+            "=== THE TOOLS ===\n"
             f"{tool_instructions}\n\n"
-            "=== TEMPORAL ANCHORING ===\n"
-            f"The current system time is: {current_time}.\n"
-            "Base all relative temporal references strictly on this date.\n"
-            "==========================\n\n"
-            f"{memory_context}\n\n"
-            "CRITICAL FORMATTING RULE: You MUST format all textual responses strictly using Emacs Org mode.\n"
-            "TOOL RULE: Only call tools that are explicitly listed."
+
+            "=== FORMATTING RULES: MARKDOWN, LATEX, & CITATIONS ===\n"
+            "1. STRUCTURE: Use standard Markdown (# for H1, ## for H2, etc.).\n"
+            "2. LATEX: For math/science, use $$ (e.g., $$E=mc^2$$).\n"
+            "3. INLINE CITATIONS: This is critical. Whenever you use information from a tool "
+            "result (RAG or Web Search), you MUST cite it inline.\n"
+            "   - For local files: Use the filename as a link to its path (e.g., `[main.py](~/monorepo/main.py)`).\n"
+            "   - For web results: Use the title as a link to the URL (e.g., `[NixOS Wiki](https://nixos.wiki/...)`).\n"
+            "4. CODE: Use fenced blocks (```python).\n\n"
+
+            "=== OPERATIONAL PROTOCOL ===\n"
+            "- Start with a Markdown heading.\n"
+            "- If multiple sources contradict, mention both and cite them.\n"
+            "- Maintain your warm, Chief-of-Staff persona."
         )
         
         if self.history.messages and isinstance(self.history.messages[0], SystemMessage):
             self.history.messages[0] = SystemMessage(content=prompt_content)
         else:
-            self.history.add_message(SystemMessage(content=prompt_content))
+            self.history.insert_message(0, SystemMessage(content=prompt_content))
 
     def strip_thought(self, text):
         if not text: return ""
         return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
 
-    def _save_to_org(self, user_input, agent_response):
+    def _open_in_emacs(self, filepath):
+        """Attempts to open the newly created file in your existing Emacs session."""
+        # Ensure path is absolute and shell-escaped
+        abs_path = os.path.abspath(filepath)
+        
+        print(f"\n[DEBUG] 🚀 Attempting to open: {abs_path}", flush=True)
+        
+        try:
+            # We use shell=True so it picks up your shell's PATH and environment
+            # We also capture output to see the actual error if it fails
+            cmd = f"emacsclient -n '{abs_path}'"
+            result = subprocess.run(
+                cmd, 
+                shell=True, 
+                capture_output=True, 
+                text=True
+            )
+            
+            if result.returncode == 0:
+                print(f"✅ File opened in Emacs buffer.", flush=True)
+            else:
+                print(f"⚠️ emacsclient returned error: {result.stderr.strip()}", flush=True)
+                print(f"💡 Hint: Is the Emacs server running? (M-x server-start)", flush=True)
+                
+        except Exception as e:
+            print(f"❌ Failed to execute emacsclient: {e}", flush=True)
+
+    def _save_to_md(self, user_input, agent_response):
+        """Saves interaction to a .md file."""
+        first_save = False
         if not self.session_file:
-            # Simple unique file generation
+            first_save = True
             hash_input = (user_input + agent_response).encode('utf-8')
             guid = hashlib.sha256(hash_input).hexdigest()[:12]
-            self.session_file = os.path.join(ORG_DIR, f"session_{guid}.org")
-            with open(self.session_file, "a") as f:
-                f.write(f"#+TITLE: Session {guid}\n\n")
+            self.session_file = os.path.join(MD_DIR, f"session_{guid}.md")
+            with open(self.session_file, "w", encoding="utf-8") as f:
+                f.write(f"# Session {guid}\nDate: {datetime.now().strftime('%Y-%m-%d')}\n\n")
         
-        with open(self.session_file, "a") as f:
-            f.write(f"* User\n{user_input}\n\n* Agent\n{agent_response}\n\n")
+        with open(self.session_file, "a", encoding="utf-8") as f:
+            f.write(f"## User Prompt\n{user_input}\n\n")
+            f.write(f"## Agent Response\n{agent_response}\n\n")
+            f.write("---\n\n")
+
+        if first_save:
+            self._open_in_emacs(self.session_file)
 
     def distill_and_exit(self):
         print("\n🧠 Distilling context...", flush=True)
@@ -98,66 +143,85 @@ class LocalAgent:
         exit(0)
 
     def start(self):
-        print(f"\n🤖 NextAgent Initialized [{DEFAULT_MODEL}]", flush=True)
-        print("💡 Shortcuts: [Enter] to Send | [Shift+Enter] for New Line", flush=True)
+        print(f"\n🤖 NextAgent Ready.", flush=True)
         print("-" * 60, flush=True)
         
+        # Create a 'Clean' LLM instance that HAS NO TOOLS BOUND
+        # This is used for the final summary to prevent the model from asking for more tools.
+        clean_llm = ChatOllama(model=DEFAULT_MODEL, temperature=0)
+
         while True:
             try:
-                user_input = pt_prompt(
-                    "\nYou: ", 
-                    history=self.cli_history, 
-                    multiline=True, 
-                    key_bindings=self.kb, # ATTACH THE NEW BINDINGS
-                    prompt_continuation="... "
-                ).strip()
+                user_input = pt_prompt("\nYou: ", history=self.cli_history, multiline=True, 
+                                       key_bindings=self.kb, prompt_continuation="... ").strip()
             except (KeyboardInterrupt, EOFError):
                 self.distill_and_exit()
                 
             if not user_input: continue
-            
-            # Command Execution
             if user_input.startswith("/"):
-                # Pass 'self' so the command can access agent data
                 self.commands.execute(user_input, self)
                 continue
 
             self.history.add_message(HumanMessage(content=user_input))
             
             iteration = 0
-            while iteration < MAX_TOOL_CALLS:
-                print(f"🤔 Thinking...", end="\r", flush=True)
+            executed_tool_calls = set() 
+
+            while True:
+                # 1. Check if we have exceeded our 'Search turns'
+                if iteration >= MAX_TOOL_CALLS:
+                    print(f"\n[!] Search limit reached. Synthesizing final Org-mode response...", flush=True)
+                    
+                    # We inject a final prompt and use the 'clean_llm' which has no tools.
+                    # This forces the model to use the data it already has.
+                    self.history.add_message(SystemMessage(content=(
+                        "You have reached the maximum search limit. Based on the tool results "
+                        "provided in the history above, write your final response now in STRICT Org mode. "
+                        "Do not mention the tool limit to the user; just provide the summary."
+                    )))
+                    
+                    final_response = clean_llm.invoke(self.history.messages)
+                    clean_content = self.strip_thought(final_response.content)
+                    
+                    self.history.add_message(AIMessage(content=clean_content))
+                    print(f"Agent: {clean_content}", flush=True)
+                    self._save_to_md(user_input, clean_content)
+                    break
+
+                # 2. Standard reasoning turn
+                print(f"🤔 Thinking (Step {iteration + 1})...", end="\r", flush=True)
                 response_msg = self.llm.invoke(self.history.messages)
                 
-                if response_msg.tool_calls:
-                    valid_calls = []
-                    invalid_found = False
+                # CASE: The model gives a final text answer
+                if not response_msg.tool_calls:
+                    clean_content = self.strip_thought(response_msg.content)
                     
-                    for tc in response_msg.tool_calls:
-                        if tc['name'] not in self.tools.functions:
-                            invalid_found = True
-                            print(f"\n⚠️ Hallucination! Tool '{tc['name']}' unknown.", flush=True)
-                            available = ", ".join(self.tools.functions.keys())
-                            error_msg = f"Error: Tool '{tc['name']}' does not exist. Use: [{available}]."
-                            self.history.add_message(response_msg)
-                            self.history.add_message(ToolMessage(content=error_msg, tool_call_id=tc['id'], name=tc['name']))
-                            break
-                        else:
-                            valid_calls.append(tc)
+                    # If the model is empty for some reason, try to force a response
+                    if not clean_content:
+                        iteration = MAX_TOOL_CALLS
+                        continue
 
-                    if invalid_found: continue 
+                    self.history.add_message(AIMessage(content=clean_content))
+                    print(" " * 40, end="\r", flush=True) 
+                    print(f"Agent: {clean_content}", flush=True)
+                    self._save_to_md(user_input, clean_content)
+                    break
 
-                    self.history.add_message(response_msg)
-                    for tc in valid_calls:
-                        result = self.tools.execute(tc, self)
-                        self.history.add_message(ToolMessage(content=str(result), tool_call_id=tc['id'], name=tc['name']))
-                    
-                    iteration += 1
-                    continue
+                # CASE: The model requests tools
+                self.history.add_message(response_msg)
                 
-                clean_content = self.strip_thought(response_msg.content)
-                self.history.add_message(AIMessage(content=clean_content))
-                print(" " * 40, end="\r", flush=True) 
-                print(f"Agent: {clean_content}", flush=True)
-                self._save_to_org(user_input, clean_content)
-                break
+                for tc in response_msg.tool_calls:
+                    call_sig = f"{tc['name']}({str(tc['args'])})"
+                    
+                    if call_sig in executed_tool_calls:
+                        result = "Error: Duplicate search. You already have this info. Please summarize or try a different query."
+                    elif tc['name'] not in self.tools.functions:
+                        available = ", ".join(self.tools.functions.keys())
+                        result = f"Error: Tool '{tc['name']}' unknown. Available: [{available}]."
+                    else:
+                        result = self.tools.execute(tc, self)
+                        executed_tool_calls.add(call_sig)
+
+                    self.history.add_message(ToolMessage(content=str(result), tool_call_id=tc['id'], name=tc['name']))
+                
+                iteration += 1

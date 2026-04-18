@@ -1,9 +1,9 @@
 {
   "type": "function",
-  "agent_instruction": "Use this to search the user's local codebase for internal files and logic.",
+  "agent_instruction": "Use this to search the user's PKM database, which includes their agenda, journal, configurations, and everything about them.",
   "function": {
     "name": "monorepo_query",
-    "description": "Search the monorepo codebase for specific functions, classes, or context.",
+    "description": "Search the monorepo codebase for specific context about the user, and about the NixOS flake codebase.",
     "parameters": {
       "type": "object",
       "properties": {
