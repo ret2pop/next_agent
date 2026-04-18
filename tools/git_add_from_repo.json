@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_add_from_repo",
+    "description": "Add files to git from a specific repository directory",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "description": "The files to add to git (can be multiple)",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository directory to cd into",
+          "type": "string"
+        }
+      },
+      "required": [
+        "files",
+        "path"
+      ]
+    }
+  },
+  "bash_template": "cd {{{path}}} && git add {{{files}}}"
+}

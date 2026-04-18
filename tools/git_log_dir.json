@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_log_dir",
+    "description": "Run git log on a specific directory or file path",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "description": "Number of commits to show (default: 10)",
+          "type": "integer"
+        },
+        "path": {
+          "description": "The directory or file path to show git log for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lines",
+        "path"
+      ]
+    }
+  },
+  "bash_template": "git log -n {{{lines}}} --oneline -- {{{path}}}"
+}

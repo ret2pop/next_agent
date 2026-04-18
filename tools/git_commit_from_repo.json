@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "git_commit_from_repo",
+    "description": "Commit changes from a specific repository directory",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "description": "The commit message",
+          "type": "string"
+        },
+        "path": {
+          "description": "The repository directory to cd into",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message",
+        "path"
+      ]
+    }
+  },
+  "bash_template": "cd {{{path}}} && git commit -m \"{{{message}}}\""
+}
