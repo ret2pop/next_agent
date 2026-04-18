@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "agent_code_query",
+    "description": "Search your own source code (next_agent). Use this when Preston asks you about how you work, how your code is structured, or to look up your own Python files.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search term, filename, or logic you want to find in your own codebase."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  }
+}

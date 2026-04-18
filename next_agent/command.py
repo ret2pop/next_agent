@@ -1,3 +1,5 @@
+from langchain_ollama import ChatOllama
+
 class CommandRegistry:
     """A modular way to add, store, and execute slash commands."""
     def __init__(self):
@@ -36,7 +38,8 @@ def cmd_help(agent, args):
 
 @command_registry.register("/rebuild", "Rebuild the monorepo vector database")
 def cmd_rebuild(agent, args):
-    agent.rag.rebuild_index()
+    agent.monorepo_rag.rebuild_index()
+    agent.agent_rag.rebuild_index()
 
 @command_registry.register("/memory", "Show the current conversation history")
 def cmd_memory(agent, args):
@@ -58,3 +61,23 @@ def cmd_clear(agent, args):
 @command_registry.register("/quit", "Save memory and exit the agent")
 def cmd_quit(agent, args):
     agent.distill_and_exit()
+
+from .vars import DEFAULT_MODEL
+from langchain_ollama import ChatOllama
+
+@command_registry.register("/reload", "Reload the agent's tools and system prompt")
+def cmd_reload(agent, args):
+    print("🔄 Reloading tool registry and system instructions...", flush=True)
+    
+    # 1. Re-scan the tools directory
+    agent.tools.load_tools() 
+    
+    # 2. Re-bind the updated schemas to the LLM
+    agent.llm = ChatOllama(model=DEFAULT_MODEL, temperature=0)
+    if agent.tools.schemas:
+        agent.llm = agent.llm.bind_tools(agent.tools.schemas)
+        
+    # 3. Refresh system prompt so it learns the new instructions
+    agent._inject_system_prompt()
+    
+    print("✅ Reload complete. New tools are now live.", flush=True)

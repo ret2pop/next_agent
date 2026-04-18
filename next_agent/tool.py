@@ -1,70 +1,113 @@
 import os
 import json
-import glob
 from .vars import TOOLS_DIR, AGENDA_FILE
 from .search import TavilyProvider
+import subprocess
 
 class ToolRegistry:
-    def __init__(self, tools_dir: str):
-        self.tools_dir = tools_dir
-        self.schemas = []
-        self.instructions = [] # Store the extracted prompt instructions
-        self.functions = {}
-        self._load_schemas()
+    def __init__(self):
+        self.explicit_functions = {}  # Functions decorated with @register
+        self.schemas = []             # The JSON schemas for the LLM
+        self.load_tools()
 
-    def _load_schemas(self):
-        if not os.path.exists(self.tools_dir):
-            os.makedirs(self.tools_dir, exist_ok=True)
-            return
-
-        for filepath in glob.glob(os.path.join(self.tools_dir, "*.json")):
-            with open(filepath, 'r') as f:
-                try:
-                    schema = json.load(f)
-                    
-                    # 1. Extract the custom instruction and name
-                    name = schema.get("function", {}).get("name", "unknown")
-                    instruction = schema.pop("agent_instruction", f"Use this tool when you need to execute {name}.")
-                    
-                    # 2. Store the formatted instruction for the System Prompt
-                    self.instructions.append(f"`{name}`: {instruction}")
-                    
-                    # 3. Append the sanitized schema for LangChain
-                    self.schemas.append(schema)
-                    print(f"🔧 Loaded tool schema: {name}")
-                except json.JSONDecodeError:
-                    print(f"⚠️ Error parsing {filepath}")
-
-    def get_prompt_instructions(self) -> str:
-        """Returns a numbered, formatted string of all tool instructions."""
-        if not self.instructions:
-            return "You have no additional tools available."
-        
-        return "\n".join([f"{i+1}. {inst}" for i, inst in enumerate(self.instructions)])
-
-    def register(self, tool_name: str):
+    def register(self, name):
+        """Decorator to register a pure Python tool."""
         def decorator(func):
-            self.functions[tool_name] = func
+            self.explicit_functions[name] = func
             return func
         return decorator
 
-    def execute(self, tool_call, agent_instance) -> str:
+    def load_tools(self):
+        """Scans the tools directory to build the schema list."""
+        self.schemas = []
+        if not os.path.exists(TOOLS_DIR):
+            os.makedirs(TOOLS_DIR)
+            
+        for filename in os.listdir(TOOLS_DIR):
+            if filename.endswith(".json"):
+                with open(os.path.join(TOOLS_DIR, filename), "r") as f:
+                    try:
+                        config = json.load(f)
+                        # We keep the schema so the LLM knows the tool exists
+                        self.schemas.append(config)
+                    except json.JSONDecodeError:
+                        print(f"⚠️ Failed to parse {filename}")
+
+    def execute(self, tool_call, agent_instance):
         name = tool_call["name"]
         args = tool_call["args"]
-        
-        if name in self.functions:
-            print(f"\n🛠️  Executing tool: {name}")
-            return self.functions[name](agent_instance, **args)
-        return f"Error: Tool '{name}' not found."
 
+        # 1. Check if there is an explicit Python function registered
+        if name in self.explicit_functions:
+            return self.explicit_functions[name](agent_instance, **args)
 
-# --- Global Registry Instance ---
-tool_registry = ToolRegistry(tools_dir=TOOLS_DIR)
+        # 2. Otherwise, look for a declarative bash template in the schemas
+        for schema in self.schemas:
+            if schema["function"]["name"] == name and "bash_template" in schema:
+                return self._run_bash_template(schema["bash_template"], args)
+
+        return f"Error: No implementation found for tool '{name}'."
+
+    def _run_bash_template(self, template, args):
+        """Executes a declarative bash command using custom {{{key}}} delimiters."""
+        try:
+            cmd = template
+            
+            # Safely inject the arguments by replacing the custom delimiters
+            for key, value in args.items():
+                target = "{{{" + key + "}}}"
+                cmd = cmd.replace(target, str(value))
+            
+            # Quick safety check: Did the LLM leave unpopulated variables?
+            if "{{{" in cmd and "}}}" in cmd:
+                print(f"⚠️ Warning: Unreplaced variables detected in bash command:\n{cmd}", flush=True)
+
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            return res.stdout if res.returncode == 0 else f"Error: {res.stderr}"
+        except Exception as e:
+            return f"Fault: {str(e)}"
+
+    def get_prompt_instructions(self) -> str:
+        """
+        Formats the currently loaded tool schemas into a clear instruction 
+        block for the LLM's system prompt.
+        """
+        if not self.schemas:
+            return "No tools are currently available."
+
+        instructions = []
+        for schema in self.schemas:
+            func = schema.get("function", {})
+            name = func.get("name")
+            desc = func.get("description")
+            params = func.get("parameters", {}).get("properties", {})
+            
+            instr = f"- Tool: {name}\n  Description: {desc}\n  Parameters: {list(params.keys())}"
+            instructions.append(instr)
+
+        return "\n".join(instructions)
+
+    def get_tool_names(self) -> list:
+        """Returns a list of all tool names currently known to the LLM."""
+        return [schema["function"]["name"] for schema in self.schemas if "function" in schema]
+
+    def has_tool(self, name: str) -> bool:
+        """Checks if a tool exists in the loaded schemas."""
+        return name in self.get_tool_names()
+
+# Instantiate the singleton
+tool_registry = ToolRegistry()
 
 # --- Tool Implementations ---
 @tool_registry.register("monorepo_query")
 def execute_monorepo_query(agent, query: str) -> str:
-    return agent.rag.search(query)
+    return agent.monorepo_rag.search(query)
+
+@tool_registry.register("agent_code_query")
+def execute_agent_code_query(agent, query: str):
+    """Search the agent's own source code to understand its architecture."""
+    # Point this to the new agent_rag
+    return agent.agent_rag.search(query)
 
 @tool_registry.register("web_search")
 def execute_web_search(agent, query: str) -> str:
@@ -91,24 +134,51 @@ def execute_append_agenda(agent, task_name: str, scheduled_date: str, descriptio
         return f"Error: Failed to write to agenda. Details: {str(e)}"
 
 @tool_registry.register("create_bash_tool")
-def execute_create_bash_tool(agent, tool_name, description, bash_template, properties):
-    """Preston's tool-creation tool: Just writes a JSON manifest."""
-    manifest = {
-        "type": "function",
-        "function": {
-            "name": tool_name,
-            "description": description,
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": list(properties.keys())
-            }
-        },
-        "bash_template": bash_template
-    }
-    
-    path = os.path.join(TOOLS_DIR, f"{tool_name}.json")
-    with open(path, "w") as f:
-        json.dump(manifest, f, indent=2)
+def execute_create_bash_tool(agent, **kwargs) -> str:
+    """
+    Constructs a declarative JSON tool manifest in the TOOLS_DIR.
+    Uses kwargs to gracefully handle schema naming updates.
+    """
+    try:
+        tool_name = kwargs.get("tool_name")
+        description = kwargs.get("description")
         
-    return f"Success: Manifest created for {tool_name}. Run /reload to initialize."
+        # Safely catch either the new name or the old name
+        bash_template = kwargs.get("bash_template") or kwargs.get("bash_command_template")
+        
+        # Safely handle either a dictionary (new style) or a JSON string (old style)
+        properties = kwargs.get("properties")
+        if properties is None and "parameters_json" in kwargs:
+            import json
+            properties = json.loads(kwargs["parameters_json"])
+
+        if not all([tool_name, description, bash_template, properties]):
+            return "❌ Error: Missing required arguments. I need tool_name, description, bash_template, and properties."
+
+        # Ensure the tools directory exists relative to AGENT_ROOT
+        os.makedirs(TOOLS_DIR, exist_ok=True)
+        
+        manifest = {
+            "type": "function",
+            "function": {
+                "name": tool_name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": properties,
+                    "required": list(properties.keys())
+                }
+            },
+            "bash_template": bash_template
+        }
+        
+        # Absolute path based on AGENT_ROOT
+        manifest_path = os.path.join(TOOLS_DIR, f"{tool_name}.json")
+        
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            import json
+            json.dump(manifest, f, indent=2)
+            
+        return f"✅ Manifest for '{tool_name}' written to {manifest_path}. Please run /reload to initialize."
+    except Exception as e:
+        return f"❌ Failed to create tool manifest: {str(e)}"

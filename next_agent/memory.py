@@ -7,16 +7,30 @@ from langchain_core.documents import Document
 
 from .vars import EMBEDDING_MODEL
 
-
 class CodebaseRAG:
-    def __init__(self, repo_path: str, db_path: str):
+    def __init__(self, repo_path: str, db_path: str, index_name: str = "monorepo_index"):
         self.repo_path = repo_path
         self.db_path = db_path
+        self.index_name = index_name # <-- Make this configurable
         self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
         self.vector_store = None
-        self.index_name = "monorepo_index"
+        
         os.makedirs(self.db_path, exist_ok=True)
         self.load_existing_db()
+
+    def search(self, query: str, k: int = 3) -> str:
+        if not self.vector_store:
+            return "❌ Error: Monorepo index not built. Run /rebuild."
+        
+        results = self.vector_store.similarity_search(query, k=k)
+        if not results:
+            return "No relevant code found."
+        
+        context_parts = []
+        for doc in results:
+            path = os.path.abspath(doc.metadata.get('source'))
+            context_parts.append(f"SOURCE_FILE_PATH: {path}\nCONTENT:\n{doc.page_content}\n---")
+        return "\n".join(context_parts)
 
     def load_existing_db(self):
         index_path = os.path.join(self.db_path, f"{self.index_name}.faiss")
@@ -57,7 +71,7 @@ class CodebaseRAG:
                 d
                 for d in dirs
                 if d
-                not in {".git", "node_modules", "venv", "__pycache__", "dist", "build"}
+                not in {".git", "node_modules", ".venv", "__pycache__", "dist", "build"}
             ]
 
             for file in files:
@@ -99,19 +113,3 @@ class CodebaseRAG:
         except Exception as e:
             print(f"\n❌ Embedding Error: {e}")
             print("Check if Ollama is running and you have 'nomic-embed-text' pulled.")
-
-
-        def search(self, query: str, k: int = 3) -> str:
-            if not self.vector_store:
-                return "❌ Error: Monorepo index not built. Run /rebuild."
-        
-            results = self.vector_store.similarity_search(query, k=k)
-            if not results:
-                return "No relevant code found."
-            
-            context_parts = []
-            for doc in results:
-                path = os.path.abspath(doc.metadata.get('source'))
-                context_parts.append(f"SOURCE_FILE_PATH: {path}\nCONTENT:\n{doc.page_content}\n---")
-            
-            return "\n".join(context_parts)

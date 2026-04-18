@@ -74,6 +74,7 @@
               ]) ++ runtimeLibs;
 
               profile = ''
+                direnv allow
                 export CUDA_PATH="${pkgs.cudaPackages.cudatoolkit}"
                 export CUDA_HOME="${pkgs.cudaPackages.cudatoolkit}"
                 

@@ -11,14 +11,15 @@ from prompt_toolkit import prompt as pt_prompt
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.key_binding import KeyBindings # NEW IMPORT
 
-from .vars import DEFAULT_MODEL, REPO_PATH, DB_PATH, MAX_TOOL_CALLS, MEMORY_FILE, MD_DIR
+from .vars import DEFAULT_MODEL, REPO_PATH, DB_PATH, MAX_TOOL_CALLS, MEMORY_FILE, MD_DIR, SRC_ROOT, AGENT_ROOT
 from .memory import CodebaseRAG
 from .tool import tool_registry
 from .command import command_registry
 
 class LocalAgent:
     def __init__(self):
-        self.rag = CodebaseRAG(repo_path=REPO_PATH, db_path=DB_PATH)
+        self.monorepo_rag = CodebaseRAG(repo_path=REPO_PATH, db_path=DB_PATH, index_name="monorepo_index")
+        self.agent_rag = CodebaseRAG(repo_path=AGENT_ROOT, db_path=DB_PATH, index_name="agent_index")
         self.tools = tool_registry
         self.commands = command_registry
         
@@ -60,7 +61,13 @@ class LocalAgent:
         prompt_content = (
             "You are the personal Digital Famulus to Preston Pan. You are a warm, supportive, "
             "and highly capable collaborator.\n\n"
-            
+
+            "=== SPATIAL AWARENESS (YOUR ENVIRONMENT) ===\n"
+            f"You are operating within Preston's local filesystem at these key locations:\n"
+            f"- MONOREPO PATH ON DISK: `{REPO_PATH}`.\n"
+            f"- PROJECT SOURCE ROOT: `{SRC_ROOT}` (Where other individual repositories live).\n"
+            f"- YOUR CORE (AGENT_ROOT): `{AGENT_ROOT}` (Where your own tools, cache, and logic reside).\n"
+
             f"=== TEMPORAL ANCHORING ===\nCurrent Time: {current_time}.\n\n"
             f"=== USER CONTEXT ===\n{ltm_content}\n\n"
             "=== THE TOOLS ===\n"
@@ -82,9 +89,14 @@ class LocalAgent:
         )
         
         if self.history.messages and isinstance(self.history.messages[0], SystemMessage):
+            # Update existing system prompt
             self.history.messages[0] = SystemMessage(content=prompt_content)
+        elif not self.history.messages:
+            # If history is completely empty, standard add_message works
+            self.history.add_message(SystemMessage(content=prompt_content))
         else:
-            self.history.insert_message(0, SystemMessage(content=prompt_content))
+            # If there are messages but no system prompt, insert into the underlying list
+            self.history.messages.insert(0, SystemMessage(content=prompt_content))
 
     def strip_thought(self, text):
         if not text: return ""
@@ -215,9 +227,13 @@ class LocalAgent:
                     
                     if call_sig in executed_tool_calls:
                         result = "Error: Duplicate search. You already have this info. Please summarize or try a different query."
-                    elif tc['name'] not in self.tools.functions:
-                        available = ", ".join(self.tools.functions.keys())
+                    
+                    # --- FIXED HALLUCINATION CHECK ---
+                    elif not self.tools.has_tool(tc['name']):
+                        available = ", ".join(self.tools.get_tool_names())
                         result = f"Error: Tool '{tc['name']}' unknown. Available: [{available}]."
+                    # ---------------------------------
+                    
                     else:
                         result = self.tools.execute(tc, self)
                         executed_tool_calls.add(call_sig)

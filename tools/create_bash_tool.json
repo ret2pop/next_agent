@@ -1,0 +1,34 @@
+{
+  "type": "function",
+  "function": {
+    "name": "create_bash_tool",
+    "description": "Generates a new tool (JSON schema and execution logic) for a specific bash command. Use this when Preston asks for a new system or CLI capability.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "tool_name": {
+          "type": "string",
+          "description": "snake_case name of the new tool."
+        },
+        "description": {
+          "type": "string",
+          "description": "What this new tool will do."
+        },
+        "bash_template": {
+          "type": "string",
+          "description": "The bash command. CRITICAL: To insert dynamic arguments, you MUST use triple curly braces (e.g., 'git log -n {{{lines}}}', if you have `lines` as a field in your tool). Write the bash command in a short way, as though you are using an interactive shell."
+        },
+        "properties": {
+          "type": "object",
+          "description": "A JSON object mapping parameter names to their types and descriptions."
+        }
+      },
+      "required": [
+        "tool_name",
+        "description",
+        "bash_template",
+        "properties"
+      ]
+    }
+  }
+}
