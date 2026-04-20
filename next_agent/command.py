@@ -1,4 +1,5 @@
 from langchain_ollama import ChatOllama
+from .vars import DEFAULT_MODEL
 
 class CommandRegistry:
     """A modular way to add, store, and execute slash commands."""
@@ -36,10 +37,22 @@ def cmd_help(agent, args):
     for trigger, data in agent.commands.commands.items():
         print(f"  {trigger:<15} - {data['desc']}")
 
-@command_registry.register("/rebuild", "Rebuild the monorepo vector database")
-def cmd_rebuild(agent, args):
+@command_registry.register("/rebuild_all", "Rebuild all vector databases")
+def cmd_rebuild_all(agent, args):
     agent.monorepo_rag.rebuild_index()
     agent.agent_rag.rebuild_index()
+    agent.email_rag.rebuild_index()
+
+@command_registry.register("/rebuild_monorepo", "Rebuild the monorepo vector database")
+def cmd_rebuild_monorepo(agent, args):
+    agent.monorepo_rag.rebuild_index()
+
+@command_registry.register("/rebuild_agent", "Rebuild the agent repo vector database")
+def cmd_rebuild_agent(agent, args):
+    agent.agent_rag.rebuild_index()
+
+@command_registry.register("/rebuild_email", "Rebuild the email vector database")
+def cmd_rebuild_email(agent, args):
     agent.email_rag.rebuild_index()
 
 @command_registry.register("/memory", "Show the current conversation history")
@@ -63,9 +76,6 @@ def cmd_clear(agent, args):
 def cmd_quit(agent, args):
     agent.distill_and_exit()
 
-from .vars import DEFAULT_MODEL
-from langchain_ollama import ChatOllama
-
 @command_registry.register("/reload", "Reload the agent's tools and system prompt")
 def cmd_reload(agent, args):
     print("🔄 Reloading tool registry and system instructions...", flush=True)
@@ -82,3 +92,9 @@ def cmd_reload(agent, args):
     agent._inject_system_prompt()
     
     print("✅ Reload complete. New tools are now live.", flush=True)
+
+@command_registry.register("/toggle_voice", "Toggle voice playback mode")
+def cmd_toggle_voice(agent, args):
+    agent.voice = not agent.voice
+    print(f"✅ Voice is now: {agent.voice}", flush=True)
+    pass

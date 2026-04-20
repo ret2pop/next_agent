@@ -20,13 +20,16 @@ class CodebaseRAG:
             ".json",
             ".org",
             ".nix",
-        )):
+        ),
+                 email_store = False
+                 ):
         self.repo_path = repo_path
         self.db_path = db_path
         self.index_name = index_name
         self.embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
         self.vector_store = None
         self.valid_exts = valid_exts
+        self.email_store = email_store
         
         os.makedirs(self.db_path, exist_ok=True)
         self.load_existing_db()
@@ -78,7 +81,7 @@ class CodebaseRAG:
                 if (self.valid_exts is None) or (os.path.splitext(file)[1].lower() in self.valid_exts):
                     file_path = os.path.join(root, file)
                     try:
-                        if self.valid_exts is None:
+                        if self.email_store:
                             with open(file_path, "rb") as f:
                                 msg = email.message_from_binary_file(f, policy=policy.default)
                                 body = ""

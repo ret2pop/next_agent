@@ -17,7 +17,7 @@ class ToolRegistry:
             self.explicit_functions[name] = func
             return func
         return decorator
-
+    
     def load_tools(self):
         """Scans the tools directory to build the schema list."""
         self.schemas = []
@@ -29,22 +29,38 @@ class ToolRegistry:
                 with open(os.path.join(TOOLS_DIR, filename), "r") as f:
                     try:
                         config = json.load(f)
-                        # We keep the schema so the LLM knows the tool exists
                         self.schemas.append(config)
                     except json.JSONDecodeError:
                         print(f"⚠️ Failed to parse {filename}")
+
+    def auto_bind_functions(self, local_globals):
+        """
+        Metaprogramming magic: Scans the provided dictionary (usually globals()) 
+        and automatically maps `execute_<tool_name>` functions to their schemas.
+        """
+        for schema in self.schemas:
+            # Safely extract the tool name from the schema
+            func_data = schema.get("function", {})
+            tool_name = func_data.get("name")
+            
+            if not tool_name:
+                continue
+                
+            expected_func_name = f"execute_{tool_name}"
+            
+            # If a python function with this name exists in the file, register it
+            if expected_func_name in local_globals and callable(local_globals[expected_func_name]):
+                self.explicit_functions[tool_name] = local_globals[expected_func_name]
 
     def execute(self, tool_call, agent_instance):
         name = tool_call["name"]
         args = tool_call["args"]
 
-        # 1. Check if there is an explicit Python function registered
         if name in self.explicit_functions:
             return self.explicit_functions[name](agent_instance, **args)
 
-        # 2. Otherwise, look for a declarative bash template in the schemas
         for schema in self.schemas:
-            if schema["function"]["name"] == name and "bash_template" in schema:
+            if schema.get("function", {}).get("name") == name and "bash_template" in schema:
                 return self._run_bash_template(schema["bash_template"], args)
 
         return f"Error: No implementation found for tool '{name}'."
@@ -89,32 +105,26 @@ class ToolRegistry:
         return "\n".join(instructions)
 
     def get_tool_names(self) -> list:
-        """Returns a list of all tool names currently known to the LLM."""
         return [schema["function"]["name"] for schema in self.schemas if "function" in schema]
 
     def has_tool(self, name: str) -> bool:
-        """Checks if a tool exists in the loaded schemas."""
         return name in self.get_tool_names()
 
 # Instantiate the singleton
 tool_registry = ToolRegistry()
 
 # --- Tool Implementations ---
-@tool_registry.register("monorepo_query")
 def execute_monorepo_query(agent, query: str) -> str:
     return agent.monorepo_rag.search(query)
 
-@tool_registry.register("agent_code_query")
 def execute_agent_code_query(agent, query: str):
     """Search the agent's own source code to understand its architecture."""
     return agent.agent_rag.search(query)
 
-@tool_registry.register("email_query")
 def execute_email_query(agent, query: str):
     """Search the agent's own source code to understand its architecture."""
     return agent.email_rag.search(query)
 
-@tool_registry.register("web_search")
 def execute_web_search(agent, query: str) -> str:
     try:
         provider = TavilyProvider()
@@ -122,7 +132,6 @@ def execute_web_search(agent, query: str) -> str:
     except Exception as e:
         return str(e)
 
-@tool_registry.register("append_agenda")
 def execute_append_agenda(agent, task_name: str, scheduled_date: str, description: str) -> str:
     """Appends a correctly formatted Org-mode scheduled item to the agenda file."""
     try:
@@ -138,7 +147,6 @@ def execute_append_agenda(agent, task_name: str, scheduled_date: str, descriptio
     except Exception as e:
         return f"Error: Failed to write to agenda. Details: {str(e)}"
 
-@tool_registry.register("create_bash_tool")
 def execute_create_bash_tool(agent, **kwargs) -> str:
     """
     Constructs a declarative JSON tool manifest in the TOOLS_DIR.
@@ -187,3 +195,5 @@ def execute_create_bash_tool(agent, **kwargs) -> str:
         return f"✅ Manifest for '{tool_name}' written to {manifest_path}. Please run /reload to initialize."
     except Exception as e:
         return f"❌ Failed to create tool manifest: {str(e)}"
+
+tool_registry.auto_bind_functions(globals())
