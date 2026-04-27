@@ -162,6 +162,9 @@ def execute_create_bash_tool(agent, **kwargs) -> str:
     """
     try:
         tool_name = kwargs.get("tool_name")
+        if tool_name:
+            tool_name = os.path.basename(tool_name)
+
         description = kwargs.get("description")
         
         # Safely catch either the new name or the old name
