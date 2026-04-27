@@ -158,8 +158,8 @@ class LocalAgent(Agent):
         abs_path = os.path.abspath(filepath)
         print(f"\n[DEBUG] 🚀 Attempting to open: {abs_path}", flush=True)
         try:
-            cmd = f"emacsclient -n '{abs_path}'"
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            cmd = ["emacsclient", "-n", abs_path]
+            result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 print(f"✅ File opened in Emacs buffer.", flush=True)
             else:
