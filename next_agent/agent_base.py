@@ -9,7 +9,7 @@ class Agent(ABC):
         self.tools = tools
         self.commands = commands
         self.tts_provider = tts_provider
-        self.tts_provider = stt_provider
+        self.stt_provider = stt_provider
         self.history = ChatMessageHistory()
 
     @abstractmethod
