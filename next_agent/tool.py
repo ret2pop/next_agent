@@ -9,7 +9,14 @@ class ToolRegistry:
     def __init__(self):
         self.explicit_functions = {}
         self.schemas = []
+        self._tool_names = []
+        self._tool_names_set = set()
         self.load_tools()
+
+    def _refresh_tool_cache(self):
+        """Updates the cached tool names and set for faster access."""
+        self._tool_names = [schema["function"]["name"] for schema in self.schemas if "function" in schema]
+        self._tool_names_set = set(self._tool_names)
 
     def register(self, name):
         """Decorator to register a pure Python tool."""
@@ -32,6 +39,7 @@ class ToolRegistry:
                         self.schemas.append(config)
                     except json.JSONDecodeError:
                         print(f"⚠️ Failed to parse {filename}")
+        self._refresh_tool_cache()
 
     def auto_bind_functions(self, local_globals):
         """
@@ -105,10 +113,10 @@ class ToolRegistry:
         return "\n".join(instructions)
 
     def get_tool_names(self) -> list:
-        return [schema["function"]["name"] for schema in self.schemas if "function" in schema]
+        return self._tool_names[:]
 
     def has_tool(self, name: str) -> bool:
-        return name in self.get_tool_names()
+        return name in self._tool_names_set
 
 # Instantiate the singleton
 tool_registry = ToolRegistry()
