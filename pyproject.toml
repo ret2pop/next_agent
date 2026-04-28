@@ -31,3 +31,15 @@ dependencies = [
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "sounddevice (>=0.5.5,<0.6.0)",
+    "scipy (>=1.17.1,<2.0.0)",
+    "langchain-ollama (>=1.1.0,<2.0.0)",
+    "langchain-core (>=1.3.2,<2.0.0)",
+    "prompt-toolkit (>=3.0.52,<4.0.0)",
+    "pytest (>=9.0.3,<10.0.0)",
+    "pytest-mock (>=3.15.1,<4.0.0)",
+    "flake8 (>=7.3.0,<8.0.0)"
+]
